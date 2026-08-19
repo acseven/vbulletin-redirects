@@ -56,7 +56,7 @@ class Redirector
 
         if (isset($query['topic'])) {
             // topic=123 | topic=123.45 | topic=123.msg4567; extras like ;topicseen are separate params
-            if (preg_match('~^(\d+)(?:\.(msg(\d+)|(\d+)))?$~', $query['topic'], $m)) {
+            if (preg_match('~^(\d+)(?:\.(msg(\d+)|(\d+)))?(?=[;&]|$)~', $query['topic'], $m)) {
                 if (($m[3] ?? '') !== '') {
                     return $this->redirectPost((int) $m[3]) ?? $this->redirectDiscussion((int) $m[1]);
                 }
@@ -100,6 +100,13 @@ class Redirector
      */
     protected function parseQuery(string $query): array
     {
+        // ponytail: decode the WHOLE query before splitting — bots normalize
+        // SMF's ';' separators (and '=') to %3B/%3D and those must become
+        // split points again. Ceiling: safe only because every value in this
+        // grammar is a numeric id or bare action name, never a legal ;, & or =.
+        // Generalize this parser and this line corrupts values.
+        $query = rawurldecode($query);
+
         $params = [];
 
         foreach (preg_split('~[&;]~', $query) ?: [] as $pair) {
@@ -109,7 +116,7 @@ class Redirector
 
             [$key, $value] = explode('=', $pair, 2);
 
-            $params[rawurldecode($key)] = rawurldecode($value);
+            $params[$key] = $value;
         }
 
         return $params;
@@ -137,6 +144,14 @@ class Redirector
         $post = $this->repository->post($id);
 
         if (!$post) {
+            return null;
+        }
+
+        // Same visibility rule as topic links: a private discussion's posts
+        // must not be confirmed to exist (301) vs deleted (404)
+        $discussion = $this->repository->discussion($post->discussion_id);
+
+        if (!$discussion || $discussion->is_private) {
             return null;
         }
 

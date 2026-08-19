@@ -23,7 +23,8 @@ lookup, no translation table needed.
 | any other `?action=…` or bare `/index.php` | `/` |
 
 Deep links to a deleted post fall back to the discussion start; links to a
-missing/private discussion stay 404.
+missing/private discussion stay 404. Bot-normalized separators (`%3B` for `;`,
+`%3D` for `=`) are decoded before parsing, so crawler-mangled urls resolve.
 
 Caveat: SMF page offsets assume the SMF and Flarum post numbering match
 (hidden/unapproved posts could shift a page target by a few posts — the

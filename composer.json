@@ -23,8 +23,7 @@
     },
     "require": {
         "php": ">=8.0",
-        "flarum/core": "^1.8",
-        "flarum/tags": "^1.8"
+        "flarum/core": "^1.8"
     },
     "extra": {
         "flarum-extension": {

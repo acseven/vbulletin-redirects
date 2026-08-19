@@ -142,6 +142,7 @@ namespace Acseven\VBulletinRedirects {
     $repo->posts = [
         999 => post(999, 333, 26),
         888 => post(888, 222, 1),
+        777 => post(777, 444, 3), // inside the private discussion
     ];
     $repo->users = [5 => user(5, 'someuser')];
 
@@ -177,8 +178,14 @@ namespace Acseven\VBulletinRedirects {
     check($redirector, '/index.php', 'action=printpage;topic=111.0', "$base/d/111-some-thread", 'printpage with topic');
     check($redirector, '/index.php', 'topic=333.msg999;prev_next=prev', "$base/d/333/26", 'msg with extra params');
     check($redirector, '/index.php', 'PHPSESSID=deadbeef;topic=111.0', "$base/d/111-some-thread", 'session id cruft');
+    // bot-normalized separators seen in the wild: ; -> %3B, = -> %3D
+    check($redirector, '/index.php', 'topic=111.0%3Bprev_next%3Dnext', "$base/d/111-some-thread", 'encoded separator cruft');
+    check($redirector, '/index.php', 'topic=222.60%3Bwap2', "$base/d/222-another-thread/61", 'encoded separator wap2');
+    check($redirector, '/index.php', 'action=profile;u%3D5', "$base/u/someuser", 'encoded equals in profile');
     check($redirector, '/index.php', 'topic=99999', null, 'unknown topic');
     check($redirector, '/index.php', 'topic=444.0', null, 'private discussion');
+    check($redirector, '/index.php', 'msg=777', null, 'post in private discussion');
+    check($redirector, '/index.php', 'topic=444.msg777', null, 'topic msg into private discussion');
     check($redirector, '/index.php', 'topic=abc', null, 'garbage topic');
     check($redirector, '/index.php', '', $base, 'bare index.php');
 

@@ -1,5 +1,5 @@
 {
-    "name": "migratetoflarum/vbulletin-redirects",
+    "name": "acseven/vbulletin-redirects",
     "description": "Redirect urls to your Flarum",
     "keywords": [
         "extension",
@@ -17,8 +17,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/migratetoflarum/vbulletin-redirects/issues",
-        "source": "https://github.com/migratetoflarum/vbulletin-redirects"
+        "issues": "https://github.com/acseven/vbulletin-redirects/issues",
+        "source": "https://github.com/acseven/vbulletin-redirects"
     },
     "require": {
         "flarum/core": "^0.1.0-beta.8",

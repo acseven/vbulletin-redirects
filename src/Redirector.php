@@ -1,20 +1,28 @@
 <?php
 
-namespace MigrateToFlarum\VBulletinRedirects;
+namespace Acseven\VBulletinRedirects;
 
 use Flarum\Http\UrlGenerator;
 use Psr\Http\Message\UriInterface;
 
+/**
+ * Maps legacy SMF urls onto Flarum routes. Ids are preserved by the
+ * migration, so topic -> discussion id and msg -> post id.
+ *
+ * Query style (SMF 2.x) and "queryless" paths (SMF 1.x):
+ *   /index.php?topic=123             -> /d/123
+ *   /index.php?topic=123.45          -> /d/123/46        (45 = 0-based message offset)
+ *   /index.php?topic=123.msg4567     -> /d/{discussion}/  + post 4567's number
+ *   /index.php?msg=4567              -> same, via post lookup
+ *   /index.php/topic,123.msg4567.html -> same
+ *   /index.php/topic,123.45.html     -> /d/123/46
+ *   /index.php?board=..., /index.php/board,N.M.html -> /
+ *   /index.php?action=profile;u=9    -> /u/{username}
+ *   anything else under /index.php   -> /
+ */
 class Redirector
 {
-    /**
-     * @var Repository
-     */
     protected $repository;
-
-    /**
-     * @var UrlGenerator
-     */
     protected $url;
 
     public function __construct(Repository $repository, UrlGenerator $url)
@@ -23,81 +31,138 @@ class Redirector
         $this->url = $url;
     }
 
-    public function redirect(UriInterface $uri):? string
+    public function redirect(UriInterface $uri): ?string
     {
-        $pathParts = explode('/', $uri->getPath());
-        $filename = $pathParts[count($pathParts) - 1];
+        $path = rawurldecode($uri->getPath());
+        $query = $this->parseQuery($uri->getQuery());
 
-        switch ($filename) {
-            case 'showthread.php':
-                return $this->redirectDiscussion($uri);
-            case 'member.php':
-                return $this->redirectUser($uri);
-            case 'forumdisplay.php':
-                return $this->redirectTag($uri);
-            case 'activity.php':
-            case 'forum.php':
-            case 'index.php':
-            case 'login.php':
-            case 'register.php':
-            case 'search.php':
-                return $this->url->to('forum')->path('');
+        // SMF 1.x queryless paths
+        if (preg_match('~/index\.php/(topic|board),~', $path)) {
+            if (preg_match('~/index\.php/board,\d+(?:\.\d+)?(?:\.html)?$~', $path)) {
+                return $this->home();
+            }
+
+            if (preg_match('~/index\.php/topic,(\d+)\.(msg(\d+)|(\d+))(?:\.html)?$~', $path, $m)) {
+                // skipped alternation groups come back as '' (set!), not unset
+                if (($m[3] ?? '') !== '') {
+                    return $this->redirectPost((int) $m[3]) ?? $this->redirectDiscussion((int) $m[1]);
+                }
+
+                return $this->redirectDiscussion((int) $m[1], (int) $m[4]);
+            }
+
+            return null;
+        }
+
+        if (isset($query['topic'])) {
+            // topic=123 | topic=123.45 | topic=123.msg4567; extras like ;topicseen are separate params
+            if (preg_match('~^(\d+)(?:\.(msg(\d+)|(\d+)))?$~', $query['topic'], $m)) {
+                if (($m[3] ?? '') !== '') {
+                    return $this->redirectPost((int) $m[3]) ?? $this->redirectDiscussion((int) $m[1]);
+                }
+
+                return $this->redirectDiscussion((int) $m[1], (int) ($m[4] ?? 0));
+            }
+
+            return null;
+        }
+
+        if (isset($query['msg'])) {
+            return preg_match('~^\d+$~', $query['msg'])
+                ? $this->redirectPost((int) $query['msg'])
+                : null;
+        }
+
+        if (isset($query['board'])) {
+            return $this->home();
+        }
+
+        if (isset($query['action'])) {
+            if ($query['action'] === 'profile'
+                && isset($query['u'])
+                && preg_match('~^\d+$~', $query['u'])) {
+                return $this->redirectUser((int) $query['u']) ?? $this->home();
+            }
+
+            return $this->home();
+        }
+
+        if ($path === '/index.php') {
+            return $this->home();
         }
 
         return null;
     }
 
-    protected function idFromQueryString(UriInterface $uri):? int
+    /**
+     * SMF separates query params with ';' as often as '&', and old links
+     * carry cruft (PHPSESSID, topicseen, prev_next, ...) that must be ignored.
+     */
+    protected function parseQuery(string $query): array
     {
-        if (preg_match('~^([0-9]+)~', $uri->getQuery(), $matches) === 1) {
-            return intval($matches[1]);
+        $params = [];
+
+        foreach (preg_split('~[&;]~', $query) ?: [] as $pair) {
+            if (strpos($pair, '=') === false) {
+                continue;
+            }
+
+            [$key, $value] = explode('=', $pair, 2);
+
+            $params[rawurldecode($key)] = rawurldecode($value);
         }
 
-        return null;
+        return $params;
     }
 
-    protected function redirectDiscussion(UriInterface $uri):? string
+    protected function redirectDiscussion(int $id, int $start = 0): ?string
     {
-        $discussion = $this->repository->discussion($this->idFromQueryString($uri));
+        $discussion = $this->repository->discussion($id);
 
         if (!$discussion || $discussion->is_private) {
             return null;
         }
 
-        $discussionIdentifier = $discussion->id;
+        $identifier = $discussion->id . ($discussion->slug ? '-' . $discussion->slug : '');
 
-        if ($discussion->slug) {
-            $discussionIdentifier .= '-' . $discussion->slug;
-        }
-
-        return $this->url->to('forum')->route('discussion', [
-            'id' => $discussionIdentifier
-        ]);
+        // SMF's start offset counts messages before the target (0-based);
+        // Flarum's /d/{id}/{near} wants the 1-based post number.
+        return $start > 0
+            ? $this->path("d/$identifier/" . ($start + 1))
+            : $this->path("d/$identifier");
     }
 
-    protected function redirectUser(UriInterface $uri):? string
+    protected function redirectPost(int $id): ?string
     {
-        $user = $this->repository->user($this->idFromQueryString($uri));
+        $post = $this->repository->post($id);
+
+        if (!$post) {
+            return null;
+        }
+
+        return $this->path('d/' . $post->discussion_id . '/' . $post->number);
+    }
+
+    protected function redirectUser(int $id): ?string
+    {
+        $user = $this->repository->user($id);
 
         if (!$user) {
             return null;
         }
 
-        return $this->url->to('forum')->route('user', [
-            'username' => $user->username
-        ]);
+        return $this->path('u/' . $user->username);
     }
 
-    protected function redirectTag(UriInterface $uri):? string
+    protected function home(): string
     {
-        $tag = $this->repository->tag($this->idFromQueryString($uri));
+        // ponytail: boards -> home; hardcode a board=>tag-slug map if board
+        // links ever matter (mapping lives in the SMF db, flarum_migrated_boards)
+        return $this->path('');
+    }
 
-        if (!$tag) {
-            return null;
-        }
-
-        return $this->url->to('forum')->route('tag', [
-            'slug' => $tag->slug
-        ]);
+    protected function path(string $path): string
+    {
+        return $this->url->to('forum')->path($path);
     }
 }

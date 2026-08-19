@@ -1,60 +1,29 @@
 <?php
 
-namespace MigrateToFlarum\VBulletinRedirects;
+namespace Acseven\VBulletinRedirects;
 
 use Flarum\Discussion\Discussion;
-use Flarum\Settings\SettingsRepositoryInterface;
-use Flarum\Tags\Tag;
+use Flarum\Post\Post;
 use Flarum\User\User;
 
+/**
+ * The migration inserted discussions, posts and users keeping their SMF
+ * ids (id_topic / id_msg / id_member), so every lookup is a primary key find.
+ */
 class Repository
 {
-    protected $settings;
-
-    public function __construct(SettingsRepositoryInterface $settings)
+    public function discussion(int $id): ?Discussion
     {
-        $this->settings = $settings;
-    }
-
-    protected function idWithIncrement(string $model, int $id = null)
-    {
-        if (!is_null($id) && $increment = intval($this->settings->get('migratetoflarum-vbulletin-redirects.' . $model . 'Increment'))) {
-            $id += $increment;
-        }
-
-        return $id;
-    }
-
-    public function discussion(int $id = null):? Discussion
-    {
-        $id = $this->idWithIncrement('discussion', $id);
-
-        if (!$id) {
-            return null;
-        }
-
         return Discussion::find($id);
     }
 
-    public function user(int $id = null):? User
+    public function post(int $id): ?Post
     {
-        $id = $this->idWithIncrement('user', $id);
-
-        if (!$id) {
-            return null;
-        }
-
-        return User::find($id);
+        return Post::find($id);
     }
 
-    public function tag(int $id = null):? Tag
+    public function user(int $id): ?User
     {
-        $id = $this->idWithIncrement('tag', $id);
-
-        if (!$id) {
-            return null;
-        }
-
-        return Tag::find($id);
+        return User::find($id);
     }
 }

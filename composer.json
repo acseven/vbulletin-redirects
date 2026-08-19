@@ -1,11 +1,12 @@
 {
     "name": "acseven/vbulletin-redirects",
-    "description": "Redirect urls to your Flarum",
+    "description": "Redirect legacy SMF forum URLs to Flarum",
     "keywords": [
         "extension",
         "flarum",
         "migration",
-        "redirects"
+        "redirects",
+        "smf"
     ],
     "type": "flarum-extension",
     "license": "MIT",
@@ -21,15 +22,13 @@
         "source": "https://github.com/acseven/vbulletin-redirects"
     },
     "require": {
-        "flarum/core": "^0.1.0-beta.8",
-        "flarum/tags": "^0.1.0-beta.8.1"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^6.5"
+        "php": ">=8.0",
+        "flarum/core": "^1.8",
+        "flarum/tags": "^1.8"
     },
     "extra": {
         "flarum-extension": {
-            "title": "vBulletin Redirects",
+            "title": "SMF Redirects",
             "icon": {
                 "name": "fas fa-angle-double-right",
                 "backgroundColor": "#e7672e",
@@ -39,12 +38,7 @@
     },
     "autoload": {
         "psr-4": {
-            "MigrateToFlarum\\VBulletinRedirects\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "MigrateToFlarum\\VBulletinRedirects\\Tests\\": "tests/"
+            "Acseven\\VBulletinRedirects\\": "src/"
         }
     }
 }

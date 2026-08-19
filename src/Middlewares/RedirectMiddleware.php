@@ -1,16 +1,15 @@
 <?php
 
-namespace MigrateToFlarum\VBulletinRedirects\Middlewares;
+namespace Acseven\VBulletinRedirects\Middlewares;
 
-use Exception;
+use Acseven\VBulletinRedirects\Redirector;
 use Flarum\Http\Exception\RouteNotFoundException;
 use Flarum\Settings\SettingsRepositoryInterface;
-use MigrateToFlarum\VBulletinRedirects\Redirector;
+use Laminas\Diactoros\Response\RedirectResponse;
 use Psr\Http\Message\ResponseInterface as Response;
-use Psr\Http\Server\RequestHandlerInterface as Handler;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\MiddlewareInterface as Middleware;
-use Zend\Diactoros\Response\RedirectResponse;
+use Psr\Http\Server\RequestHandlerInterface as Handler;
 
 class RedirectMiddleware implements Middleware
 {
@@ -19,29 +18,14 @@ class RedirectMiddleware implements Middleware
         try {
             return $handler->handle($request);
         } catch (RouteNotFoundException $exception) {
-            /**
-             * @var $redirector Redirector
-             */
-            $redirector = app(Redirector::class);
-
-            $to = $redirector->redirect($request->getUri());
+            $to = app(Redirector::class)->redirect($request->getUri());
 
             if ($to) {
-                /**
-                 * @var $settings SettingsRepositoryInterface
-                 */
                 $settings = app(SettingsRepositoryInterface::class);
+                $status = intval($settings->get('acseven-vbulletin-redirects.redirectStatus')) ?: 301;
 
-                $status = intval($settings->get('migratetoflarum-vbulletin-redirects.redirectStatus'));
-
-                if (!$status) {
-                    // Default redirect type
-                    // Not using it as the setting default value as we want to convert an empty string to this value as well
-                    $status = 302;
-                }
-
-                if (!in_array($status, [301, 302])) {
-                    throw new Exception("Invalid vbulletin redirect status code $status");
+                if (!in_array($status, [301, 302], true)) {
+                    throw new \Exception("Invalid redirect status code $status");
                 }
 
                 return new RedirectResponse($to, $status);
